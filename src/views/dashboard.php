@@ -7,6 +7,6 @@
 </head>
 <body>
     <h1>Dashboard</h1>
-    <p>Bem-vindo, <?php echo $_SESSION['nome']; ?>!</p>
+    <p>Bem-vindo!</p>
 </body>
 </html>

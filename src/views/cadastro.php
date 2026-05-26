@@ -9,7 +9,7 @@
 
     <h1>Cadastre-se</h1>
 
-    <form action="../controllers/auth_controller.php" method="POST">
+    <form action="../controllers/auth_controller.php" method="POST" autocomplete="off">
         
         <input type="hidden" name="acao" value="cadastro">
 

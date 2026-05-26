@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $usuario_id = $pdo->lastInsertId();
 
             // 4. Insere os dados correspondentes na tabela 'biometria'
-            $sqlBiometria = "INSERT INTO biometria (usuario_id, peso, altura, idade, genero, nivel_atividade, objective) 
+            $sqlBiometria = "INSERT INTO biometria (usuario_id, peso, altura, idade, genero, nivel_atividade, objetivo) 
                              VALUES (?, ?, ?, ?, ?, ?, ?)";
             $stmtBiometria = $pdo->prepare($sqlBiometria);
             $stmtBiometria->execute([
