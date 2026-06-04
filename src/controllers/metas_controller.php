@@ -4,38 +4,47 @@ require_once __DIR__ . '/../config/conexao.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario_id = $_SESSION['usuario_id'] ?? null;
-    $tipo_meta = $_POST['tipo_meta'] ?? '';
+    $origem_meta = $_POST['tipo_meta'] ?? 'automatica';
 
-    // Trava de segurança: se não houver usuário logado, chuta para o login
+    // Trava de segurança
     if (!$usuario_id) {
         header("Location: ../views/login.php");
         exit;
     }
 
-    // Coleta o valor correto de calorias baseado na escolha do usuário
-    if ($tipo_meta === 'automatica') {
-        $calorias = intval($_POST['calorias_calculadas']);
-    } else {
-        $calorias = intval($_POST['calorias_manuais']);
-    }
+    // Coleta os valores unificados vindos de qualquer um dos formulários
+    $kcal_meta     = intval($_POST['calorias']);
+    $proteina_meta = intval($_POST['proteina']);
+    $carbo_meta    = intval($_POST['carbo']);
+    $gordura_meta  = intval($_POST['gordura']);
 
     try {
-        // Insere a meta vinculada ao usuário. Se ele já tiver uma, atualiza (ON DUPLICATE KEY)
-        // Usando o nome correto da sua coluna: kcal_meta
-        $stmt = $pdo->prepare("INSERT INTO metas_diarias (usuario_id, kcal_meta) VALUES (?, ?) 
-                               ON DUPLICATE KEY UPDATE kcal_meta = ?");
-        $stmt->execute([$usuario_id, $calorias, $calorias]);
+        // Insere a meta completa vinculada ao id do usuário. Se já existir, atualiza tudo.
+        $sql = "INSERT INTO metas_diarias 
+                (usuario_id, kcal_meta, proteina_meta, carbo_meta, gordura_meta, origem_meta) 
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                kcal_meta = ?, 
+                proteina_meta = ?, 
+                carbo_meta = ?, 
+                gordura_meta = ?, 
+                origem_meta = ?,
+                data_atualizacao = CURRENT_TIMESTAMP";
+                
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $usuario_id, $kcal_meta, $proteina_meta, $carbo_meta, $gordura_meta, $origem_meta, // Dados do INSERT
+            $kcal_meta, $proteina_meta, $carbo_meta, $gordura_meta, $origem_meta              // Dados do UPDATE
+        ]);
 
-        // Redireciona o usuário direto para o Dashboard após salvar com sucesso
+        // Redireciona para o Dashboard após salvar com sucesso
         header("Location: ../views/dashboard.php");
         exit;
 
     } catch (Exception $e) {
-        // Exibe o erro técnico caso algo falhe (importante para os testes do TCC)
-        die("Erro crítico ao salvar a meta no banco de dados: " . $e->getMessage());
+        die("Erro crítico ao salvar a meta completa no banco de dados: " . $e->getMessage());
     }
 } else {
-    // Se tentarem acessar o controlador direto pela URL, manda para a raiz
     header("Location: ../../index.php");
     exit;
 }

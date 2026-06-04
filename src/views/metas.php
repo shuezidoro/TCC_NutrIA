@@ -17,27 +17,24 @@ $stmt->execute([$usuario_id]);
 $biometria = $stmt->fetch();
 
 if (!$biometria) {
-    // Se por acaso não houver biometria, manda preencher o cadastro
     header("Location: cadastro.php");
     exit;
 }
 
 // 2. CÁLCULO AUTOMÁTICO (Equação de Harris-Benedict Revisada)
 $peso = $biometria['peso'];
-$altura_cm = $biometria['altura'] * 100; // Converte de volta para cm se necessário para a fórmula
+$altura_cm = $biometria['altura'] * 100; 
 $idade = $biometria['idade'];
 $genero = $biometria['genero'];
 $nivel_atividade = $biometria['nivel_atividade'];
 $objetivo = $biometria['objetivo'];
 
-// Cálculo da Taxa Metabólica Basal (TMB)
 if ($genero === 'Masculino') {
     $tmb = 88.36 + (13.4 * $peso) + (4.8 * $altura_cm) - (5.7 * $idade);
 } else {
     $tmb = 447.59 + (9.2 * $peso) + (3.1 * $altura_cm) - (4.3 * $idade);
 }
 
-// Fator de Atividade para chegar ao Gasto Energético Total (GET)
 $fatores = [
     'Sedentario'   => 1.2,
     'Leve'         => 1.375,
@@ -46,18 +43,22 @@ $fatores = [
     'Muito_Ativo'  => 1.9
 ];
 $fator = $fatores[$nivel_atividade] ?? 1.2;
-$get = $tmb * $fator; // Gasto calórico diário para manter o peso
+$get = $tmb * $fator; 
 
-// Ajuste de Calorias baseado no Objetivo
 $meta_calorica = $get;
 if ($objetivo === 'Perda_Peso') {
-    $meta_calorica = $get - 500; // Déficit calórico padrão seguro
+    $meta_calorica = $get - 500; 
 } elseif ($objetivo === 'Ganho_Massa') {
-    $meta_calorica = $get + 400; // Superávit calórico padrão
+    $meta_calorica = $get + 400; 
 }
 
-// Arredonda os valores para exibição limpa
 $meta_final_auto = round($meta_calorica);
+
+// Distribuição de Macronutrientes Automática (Padrão: 40% Carbo, 30% Proteína, 30% Gordura)
+// 1g Carbo = 4kcal | 1g Prot = 4kcal | 1g Gord = 9kcal
+$auto_carbo = round(($meta_final_auto * 0.40) / 4);
+$auto_prot  = round(($meta_final_auto * 0.30) / 4);
+$auto_gord  = round(($meta_final_auto * 0.30) / 9);
 ?>
 
 <!DOCTYPE html>
@@ -66,13 +67,6 @@ $meta_final_auto = round($meta_calorica);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minhas Metas - NutrIA</title>
-    <style>
-        /* Garante que a seção manual comece escondida de forma correta */
-        #sectionManual {
-            display: none;
-            margin-top: 15px;
-        }
-    </style>
 </head>
 <body>
 
@@ -83,25 +77,40 @@ $meta_final_auto = round($meta_calorica);
         <h2>Sua Meta Calórica Recomendada por IA</h2>
         <div><?php echo $meta_final_auto; ?> kcal</div>
         <p>Calculado com base no seu objetivo de: <strong><?php echo str_replace('_', ' ', $objetivo); ?></strong></p>
+        <p>Macros sugeridos: Carbo: <?=$auto_carbo?>g | Prot: <?=$auto_prot?>g | Gord: <?=$auto_gord?>g</p>
     </div>
 
     <form action="../controllers/metas_controller.php" method="POST">
         <input type="hidden" name="tipo_meta" value="automatica">
-        <input type="hidden" name="calorias_calculadas" value="<?php echo $meta_final_auto; ?>">
+        <input type="hidden" name="calorias" value="<?php echo $meta_final_auto; ?>">
+        <input type="hidden" name="proteina" value="<?php echo $auto_prot; ?>">
+        <input type="hidden" name="carbo" value="<?php echo $auto_carbo; ?>">
+        <input type="hidden" name="gordura" value="<?php echo $auto_gord; ?>">
         <button type="submit">Aceitar e Ir para o Dashboard</button>
     </form>
 
     <br>
     <a href="#" id="btnManual">Já sei meu gasto / Quero definir manualmente</a>
-    <br>
 
-    <div id="sectionManual">
+    <div id="sectionManual" style="display: none; margin-top: 20px;">
         <form action="../controllers/metas_controller.php" method="POST">
             <input type="hidden" name="tipo_meta" value="manual">
             
             <div>
-                <label for="icalorias_man">Digite sua Meta Calórica Diária (kcal):</label>
-                <input type="number" id="icalorias_man" name="calorias_manuais" placeholder="Ex: 2200" required>
+                <label for="icalorias_man">Meta Calórica Diária (kcal):</label>
+                <input type="number" id="icalorias_man" name="calorias" placeholder="Ex: 2200" required>
+            </div>
+            <div>
+                <label for="iprot_man">Proteínas (g):</label>
+                <input type="number" id="iprot_man" name="proteina" placeholder="Ex: 150" required>
+            </div>
+            <div>
+                <label for="icarbo_man">Carboidratos (g):</label>
+                <input type="number" id="icarbo_man" name="carbo" placeholder="Ex: 200" required>
+            </div>
+            <div>
+                <label for="igord_man">Gorduras (g):</label>
+                <input type="number" id="igord_man" name="gordura" placeholder="Ex: 70" required>
             </div>
 
             <button type="submit">Salvar Meta Personalizada</button>
@@ -110,17 +119,15 @@ $meta_final_auto = round($meta_calorica);
 </div>
 
 <script>
-    // JavaScript para abrir/fechar a área manual sem recarregar a página
     const btnManual = document.getElementById('btnManual');
     const sectionManual = document.getElementById('sectionManual');
 
     btnManual.addEventListener('click', function(e) {
-        e.preventDefault(); // Evita que a página mude de foco/role para o topo
+        e.preventDefault(); 
         if (sectionManual.style.display === 'block') {
             sectionManual.style.display = 'none';
         } else {
             sectionManual.style.display = 'block';
-            sectionManual.scrollIntoView({ behavior: 'smooth' });
         }
     });
 </script>
