@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             // 1. Verifica se o e-mail já existe na tabela 'usuarios'
-            $stmtCheck = $pdo->prepare("SELECT id FROM usuario WHERE email = ?");
+            $stmtCheck = $pdo->prepare("SELECT id FROM usuarios WHERE email = ?");
             $stmtCheck->execute([$email]);
             
             if ($stmtCheck->fetch()) {
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
 
             // 3. Insere os dados na tabela 'usuarios'
-            $sqlUsuario = "INSERT INTO usuario (nome, email, senha) VALUES (?, ?, ?)";
+            $sqlUsuario = "INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)";
             $stmtUsuario = $pdo->prepare($sqlUsuario);
             $stmtUsuario->execute([$nome, $email, $senhaHash]);
 
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             // 1. Busca o usuário pelo e-mail na tabela 'usuarios'
-            $stmt = $pdo->prepare("SELECT id, nome, senha FROM usuario WHERE email = ?");
+            $stmt = $pdo->prepare("SELECT id, nome, senha FROM usuarios WHERE email = ?");
             $stmt->execute([$email]);
             $usuario = $stmt->fetch();
 
