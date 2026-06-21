@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 1. Exclui primeiro os registros filhos na tabela 'nutriente' devido à Foreign Key
             $stmtNut = $pdo->prepare("DELETE FROM nutriente WHERE refeicao_id = ?");
+            $stmtNut= $pdo->prepare("DELETE FROM nutriente WHERE refeicao_id = ?");
             $stmtNut->execute([$refeicao_id]);
 
             // 2. Exclui a refeição principal garantindo o ID e a segurança do usuário logado
@@ -56,18 +57,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ==========================================
-    // PASSO 1: RECALCULAR COM A IA SE FOR ATUALIZAÇÃO/INCLUSÃO
+    // PASSO 1: RECALCULAR COM A IA E VALIDAR SE É COMESTÍVEL
     // ==========================================
     $macrosEstimados = analisarRefeicaoComIA($descricao_texto);
 
-    if ($macrosEstimados && isset($macrosEstimados['kcal'])) {
-        $kcal     = intval($macrosEstimados['kcal']);
-        $carbo    = floatval($macrosEstimados['carbo']);
-        $proteina = floatval($macrosEstimados['proteina']);
-        $gordura  = floatval($macrosEstimados['gordura']);
-    } else {
-        $kcal = 0; $carbo = 0; $proteina = 0; $gordura = 0;
+    // TRAVA DE VALIDAÇÃO CRUCIAL: Se a IA retornar erro ou não for comestível, barra o fluxo aqui!
+    if (!$macrosEstimados || isset($macrosEstimados['erro']) || !isset($macrosEstimados['kcal'])) {
+        header("Location: ../views/dashboard.php?erro=nao_comivel");
+        exit;
     }
+
+    // Se passou na validação, coleta os nutrientes mapeados corretamente com o banco
+   // Por volta da linha 64, adicione a variável do sódio coletando do array da IA:
+    $kcal     = intval($macrosEstimados['kcal']);
+    $carbo    = floatval($macrosEstimados['carbo']);
+    $proteina = floatval($macrosEstimados['proteina']);
+    $gordura  = floatval($macrosEstimados['gordura']);
+    $acucar   = floatval($macrosEstimados['acucar'] ?? 0.00);
+    $fibra    = floatval($macrosEstimados['fibra'] ?? 0.00);
+    $sodio    = floatval($macrosEstimados['sodio'] ?? 0.00); // <-- NOVA LINHA
 
     // ==========================================
     // PASSO 2: SALVAR OU EDITAR NAS TABELAS
@@ -81,9 +89,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtRef = $pdo->prepare($sqlRefeicao);
             $stmtRef->execute([$tipo_refeicao, $descricao_texto, $refeicao_id, $usuario_id]);
 
-            $sqlNutrientes = "UPDATE nutriente SET kcal = ?, carboidratos = ?, proteinas = ?, gorduras = ? WHERE refeicao_id = ?";
+            // Adicionado sodio_obtido no UPDATE
+            $sqlNutrientes = "UPDATE nutriente SET calorias_obtidas = ?, carbo_obtido = ?, proteina_obtida = ?, gordura_obtida = ?, acucar_obtido = ?, fibra_obtida = ?, sodio_obtido = ? WHERE refeicao_id = ?";
             $stmtNut = $pdo->prepare($sqlNutrientes);
-            $stmtNut->execute([$kcal, $carbo, $proteina, $gordura, $refeicao_id]);
+            $stmtNut->execute([$kcal, $carbo, $proteina, $gordura, $acucar, $fibra, $sodio, $refeicao_id]);
 
         } else {
             // OPERAÇÃO DE INCLUSÃO PADRÃO (INSERT)
@@ -93,9 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $refeicao_id = $pdo->lastInsertId();
 
-            $sqlNutrientes = "INSERT INTO nutriente (refeicao_id, kcal, carboidratos, proteinas, gorduras) VALUES (?, ?, ?, ?, ?)";
+            // Adicionado sodio_obtido no INSERT
+            $sqlNutrientes = "INSERT INTO nutriente (refeicao_id, calorias_obtidas, proteina_obtida, carbo_obtido, gordura_obtida, acucar_obtido, fibra_obtida, sodio_obtido) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             $stmtNut = $pdo->prepare($sqlNutrientes);
-            $stmtNut->execute([$refeicao_id, $kcal, $carbo, $proteina, $gordura]);
+            $stmtNut->execute([$refeicao_id, $kcal, $proteina, $carbo, $gordura, $acucar, $fibra, $sodio]);
         }
 
         $pdo->commit();

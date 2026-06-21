@@ -7,13 +7,13 @@ if (!isset($_SESSION['usuario_id'])) {
     exit;
 }
 
-require_once __DIR__ . '/../config/conexao.php'; //
+require_once __DIR__ . '/../config/conexao.php'; 
 
-$usuario_id = $_SESSION['usuario_id']; //
-$usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário'; //
+$usuario_id = $_SESSION['usuario_id']; 
+$usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário'; 
 
 // ==========================================
-// CORREÇÃO: BUSCA OS DADOS BIOMÉTRICOS DO BANCO
+// BUSCA OS DADOS BIOMÉTRICOS DO BANCO
 // ==========================================
 $idade = 'Não informado';
 $peso = 'Não informado';
@@ -88,6 +88,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu perfil - NutrIA</title>
+    
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -284,11 +285,6 @@ try {
     
     var diasLabels = <?php echo json_encode($labelsDias); ?>;
     var pesosDados = <?php echo json_encode($dadosPesos); ?>;
-
-    if (diasLabels.length === 0) {
-        diasLabels = ['01/05', '08/05', '15/05', '22/05', '29/05', '05/06'];
-        pesosDados = [84.2, 85.0, 83.1, 82.4, 83.9, 81.5];
-    }
 
     var grafico = new Chart(ctx, {
         type: 'line',

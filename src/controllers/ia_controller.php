@@ -4,7 +4,7 @@ function analisarRefeicaoComIA($descricaoComida) {
     $apiKey = "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"; 
     $url = "https://integrate.api.nvidia.com/v1/chat/completions";
 
-    // Adicionámos açúcar e fibra no pedido do JSON
+    
     $promptSistema = "Você é um especialista em nutrição rigoroso integrado a um sistema.
     Sua função é analisar de forma realista a descrição enviada pelo usuário.
     
@@ -14,10 +14,9 @@ function analisarRefeicaoComIA($descricaoComida) {
 
     Caso seja um alimento válido, estime os nutrientes de forma realista.
     REGRAS DE PRECISÃO NUTRICIONAL:
-    1. Se o usuário NÃO especificar o peso (ex: 'um pão de queijo', 'uma fatia de mamão'), assuma SEMPRE uma porção individual MÉDIA e PADRÃO de mercado (ex: pão de queijo de 40g-50g, fatia de mamão de 100g). Nunca superestime os valores.
-    2. Seja extremamente atento às proteínas de alimentos que são majoritariamente carboidratos ou frutas. Frutas, café e açúcar puro têm quase ZERO proteína. Pão de queijo médio tradicional tem entre 2g e 3.5g de proteína. Portanto, o cálculo final deve ser a soma matemática lógica desses alimentos.
-
-    Você DEVE responder estritamente com um objeto JSON válido, contendo exatamente as chaves: 'kcal', 'carbo', 'proteina', 'gordura', 'acucar' e 'fibra'.
+    1. Se o usuário NÃO especificar o peso, assuma SEMPRE uma porção individual MÉDIA e PADRÃO de mercado. Nunca superestime os valores.
+    2. Devolva OBRIGATORIAMENTE um objeto JSON plano contendo as seguintes chaves numéricas: 'kcal', 'carbo', 'proteina', 'gordura', 'acucar', 'fibra' e 'sodio'.
+    3. O valor de 'sodio' deve ser estimado em miligramas (mg), enquanto os outros macros são em gramas (g).
     
     Regras de formatação:
     1. Não adicione saudações ou comentários.
@@ -34,7 +33,7 @@ function analisarRefeicaoComIA($descricaoComida) {
         ],
         "temperature" => 0.1,
         "top_p" => 0.7,
-        "max_tokens" => 1024,
+        "max_tokens" => 150,
         "stream" => false
     ];
 
