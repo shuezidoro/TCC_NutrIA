@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -9,6 +12,14 @@
 <body>
 
     <h1>Acessar o Sistema</h1>
+
+    <?php if (isset($_GET['erro_login'])): ?>
+        <p style="color: red; font-weight: bold;">⚠️ E-mail ou senha incorretos!</p>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['senha_alterada'])): ?>
+        <p style="color: green; font-weight: bold;">✅ Senha atualizada com sucesso! Faça login com a nova senha.</p>
+    <?php endif; ?>
 
     <form action="../controllers/auth_controller.php" method="POST" autocomplete="off">
         

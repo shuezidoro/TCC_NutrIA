@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Trava de segurança: Se o usuário não estiver logado, expulsa para a tela de login
+// Trava de segurança: Se o utilizador não estiver logado, expulsa para a página de login
 if (!isset($_SESSION['usuario_id'])) {
     header("Location: login.php");
     exit;
@@ -13,7 +13,84 @@ $usuario_id = $_SESSION['usuario_id'];
 $usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário';
 
 // ===================================================
-// BUSCA AS REFEIÇÕES DO BANCO PARA EXIBIR NO CALENDÁRIO
+// SISTEMA DE METAS: DIRETRIZES DIÁRIAS COM RECOVERY SAUDÁVEL (CORRIGIDO)
+// ===================================================
+$metas = [
+    'kcal' => 2000,
+    'prot' => 120,
+    'carbo' => 250,
+    'gord' => 65,
+    'fibra' => 25,
+    'acucar' => 50,
+    'sodio' => 2400
+];
+
+try {
+    // 1. Tenta obter as metas salvas corretamente da tabela 'metas_diarias'
+$stmtMetas = $pdo->prepare("SELECT kcal_meta, proteina_meta, carbo_meta, gordura_meta FROM metas_diarias WHERE usuario_id = ? ORDER BY id DESC LIMIT 1");
+    $stmtMetas->execute([$usuario_id]);
+    $userMeta = $stmtMetas->fetch(PDO::FETCH_ASSOC);
+
+    if ($userMeta) {
+        $metas['kcal'] = !empty($userMeta['kcal_meta']) ? intval($userMeta['kcal_meta']) : 2000;
+        $metas['prot'] = !empty($userMeta['proteina_meta']) ? floatval($userMeta['proteina_meta']) : 120;
+        $metas['carbo'] = !empty($userMeta['carbo_meta']) ? floatval($userMeta['carbo_meta']) : 250;
+        $metas['gord'] = !empty($userMeta['gordura_meta']) ? floatval($userMeta['gordura_meta']) : 65;
+    } else {
+        // 2. CASO NÃO EXISTA REGISTRO: calcula dinamicamente usando a mesma fórmula de Harris-Benedict de metas.php
+        $stmtBio = $pdo->prepare("SELECT * FROM biometria WHERE usuario_id = ? LIMIT 1");
+        $stmtBio->execute([$usuario_id]);
+        $biometria = $stmtBio->fetch(PDO::FETCH_ASSOC);
+
+        if ($biometria) {
+            $peso = $biometria['peso'];
+            $altura_cm = $biometria['altura'] * 100; // Converte metros para centímetros
+            $idade = $biometria['idade'];
+            $genero = $biometria['genero'];
+            $nivel_atividade = $biometria['nivel_atividade'];
+            $objetivo = $biometria['objetivo'];
+
+            // Equação de Harris-Benedict Revisada
+            if ($genero === 'Masculino') {
+                $tmb = 88.36 + (13.4 * $peso) + (4.8 * $altura_cm) - (5.7 * $idade);
+            } else {
+                $tmb = 447.59 + (9.2 * $peso) + (3.1 * $altura_cm) - (4.3 * $idade);
+            }
+
+            // Fatores de atividade física idênticos ao metas.php
+            $fatores = [
+                'Sedentario'   => 1.2,
+                'Leve'         => 1.375,
+                'Moderado'     => 1.55,
+                'Ativo'        => 1.725,
+                'Muito_Ativo'  => 1.9
+            ];
+            $fator = $fatores[$nivel_atividade] ?? 1.2;
+            $get = $tmb * $fator; 
+
+            // Ajuste conforme o Objetivo
+            $meta_calorica = $get;
+            if ($objetivo === 'Perda_Peso') {
+                $meta_calorica = $get - 500; 
+            } elseif ($objetivo === 'Ganho_Massa') {
+                $meta_calorica = $get + 400; 
+            }
+
+            $meta_final_auto = round($meta_calorica);
+
+            // Define e distribui os macronutrientes na mesma proporção (40% Carbo, 30% Prot, 30% Gord)
+            $metas['kcal']  = $meta_final_auto;
+            $metas['carbo'] = round(($meta_final_auto * 0.40) / 4);
+            $metas['prot']  = round(($meta_final_auto * 0.30) / 4);
+            $metas['gord']  = round(($meta_final_auto * 0.30) / 9);
+        }
+    }
+} catch (Exception $e) {
+    // Caso ocorra qualquer erro crítico inesperado, mantém o fallback seguro com valores padrão
+}
+
+// ===================================================
+// CALENDÁRIO: MAPEAMENTO E BUSCA DE REFEIÇÕES
 // ===================================================
 $eventos_refeicoes = [];
 try {
@@ -46,54 +123,13 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Nutricional</title>
+    <link rel="stylesheet" href="../../public/css/dashboard_style.css">
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/pt-br.global.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f5f6fa; margin: 0; padding: 0; }
-        .main-header { background-color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .nav-links a { text-decoration: none; margin: 0 10px; color: #555; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .dashboard-grid { display: flex; gap: 25px; margin-top: 20px; align-items: flex-start; }
-        #calendar { flex: 2; background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .side-panel { flex: 1; background: white; padding: 25px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: sticky; top: 20px; }
-        
-        /* REESTRUTURAÇÃO DO CARD PARA FORMATO DE LISTA VERTICAL */
-        .macro-list { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 10px; 
-            margin-top: 20px; 
-        }
-        
-        .macro-item-list { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 12px 16px; 
-            border-radius: 8px; 
-            color: white; 
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-        }
-        
-        /* NOVA CONFIGURAÇÃO DE CORES DA LISTA */
-        .bg-kcal   { background-color: #2c3e50; margin-bottom: 5px; } /* Destaque para calorias */
-        .bg-prot   { background-color: #ee5253; } /* Vermelho */
-        .bg-carbo  { background-color: #10ac84; } /* Verde Escuro */
-        .bg-gord   { background-color: #ff9f43; } /* Laranja */
-        .bg-fibra  { background-color: #00b894; } /* MUDADO: Verde Menta Claro Distinto */
-        .bg-acucar { background-color: #d35400; } /* Marrom */
-        .bg-sodio  { background-color: #8e44ad; } /* Roxo */
-
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 999; }
-        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-    </style>
+       
 </head>
 <body>
 
@@ -124,32 +160,73 @@ try {
 
             <div class="macro-list">
                 <div class="macro-item-list bg-kcal">
-                    <span>Energia Diária</span>
-                    <span><span id="res-kcal">0</span> kcal</span>
+                    <div class="macro-info">
+                        <span>Energia Diária</span>
+                        <span><span id="res-kcal">0</span> / <?php echo $metas['kcal']; ?> kcal</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-kcal" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-prot">
-                    <span>Proteínas</span>
-                    <span><span id="res-prot">0</span> g</span>
+                    <div class="macro-info">
+                        <span>Proteínas</span>
+                        <span><span id="res-prot">0</span> / <?php echo $metas['prot']; ?> g</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-prot" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-carbo">
-                    <span>Carboidratos</span>
-                    <span><span id="res-carbo">0</span> g</span>
+                    <div class="macro-info">
+                        <span>Carboidratos</span>
+                        <span><span id="res-carbo">0</span> / <?php echo $metas['carbo']; ?> g</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-carbo" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-gord">
-                    <span>Gorduras</span>
-                    <span><span id="res-gord">0</span> g</span>
+                    <div class="macro-info">
+                        <span>Gorduras</span>
+                        <span><span id="res-gord">0</span> / <?php echo $metas['gord']; ?> g</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-gord" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-fibra">
-                    <span>Fibras</span>
-                    <span><span id="res-fibra">0</span> g</span>
+                    <div class="macro-info">
+                        <span>Fibras</span>
+                        <span><span id="res-fibra">0</span> / <?php echo $metas['fibra']; ?> g</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-fibra" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-acucar">
-                    <span>Açúcares</span>
-                    <span><span id="res-acucar">0</span> g</span>
+                    <div class="macro-info">
+                        <span>Açúcares</span>
+                        <span><span id="res-acucar">0</span> / <?php echo $metas['acucar']; ?> g</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-acucar" class="progress-bar-fill"></div>
+                    </div>
                 </div>
+
                 <div class="macro-item-list bg-sodio">
-                    <span>Sódio Total</span>
-                    <span><span id="res-sodio">0</span> mg</span>
+                    <div class="macro-info">
+                        <span>Sódio Total</span>
+                        <span><span id="res-sodio">0</span> / <?php echo $metas['sodio']; ?> mg</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="bar-sodio" class="progress-bar-fill"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -209,6 +286,44 @@ try {
     var macroCtx = document.getElementById('macroChart').getContext('2d');
     var macroChart;
 
+    // Parser seguro das metas vindas do PHP
+    const metasDiarias = <?php echo json_encode($metas); ?>;
+
+    // Calcula as frações em tempo real e atualiza as larguras css dinamicamente
+    function atualizarBarraProgresso(elementId, valorAtual, valorMeta) {
+        const barra = document.getElementById(elementId);
+        if (!barra) return;
+        
+        // Seleciona o card pai (macro-item-list) para aplicar efeitos visuais
+        const cardPai = barra.closest('.macro-item-list');
+        
+        let percentual = 0;
+        if (valorMeta > 0) {
+            percentual = (valorAtual / valorMeta) * 100;
+        }
+        
+        if (percentual > 100) {
+            // META ULTRAPASSADA: Estímulo Visual de Alerta
+            barra.style.width = '100%';
+            barra.style.backgroundColor = '#ff2a2a'; // Amarelo/Laranja Neon chamativo
+            
+            if (cardPai) {
+                cardPai.style.boxShadow = '0 0 15px rgba(255, 42, 42, 0.75)';
+                cardPai.style.borderLeft = '6px solid #ff2a2a';
+            }
+        } else {
+            // DENTRO DA META: Mantém o comportamento original limpo
+            if (percentual < 0) percentual = 0;
+            barra.style.width = percentual.toFixed(1) + '%';
+            barra.style.backgroundColor = '#ffffff'; // Volta a ser branca
+            
+            if (cardPai) {
+                cardPai.style.boxShadow = '0 2px 4px rgba(0,0,0,0.04)';
+                cardPai.style.borderLeft = '4px solid transparent';
+            }
+        }
+    }
+
     function atualizarGrafico(prot, carbo, gord, fibra, acucar, sodioMg) {
         if (macroChart) macroChart.destroy();
 
@@ -226,8 +341,7 @@ try {
                 ((acucar / totalGramas) * 100).toFixed(1),
                 ((sodioG / totalGramas) * 100).toFixed(1)
             ];
-            // Atualizado com o novo verde menta claro para as Fibras (#00b894)
-            coresGrafico = ['#ee5253', '#10ac84', '#ff9f43', '#00b894', '#d35400', '#8e44ad'];
+            coresGrafico = ['#ee5253', '#0d8fa0', '#ff9f43', '#00b894', '#d35400', '#8e44ad'];
             labelsGrafico = ['Proteínas', 'Carboidratos', 'Gorduras', 'Fibras', 'Açúcares', 'Sódio'];
         } else {
             dadosGrafico = [100];
@@ -271,21 +385,38 @@ try {
         fetch(`../controllers/get_macros_controller.php?data=${dataStr}`)
             .then(response => response.json())
             .then(dados => {
-                document.getElementById('res-kcal').innerText   = dados.kcal || 0;
-                document.getElementById('res-prot').innerText   = dados.prot || 0;
-                document.getElementById('res-carbo').innerText  = dados.carbo || 0;
-                document.getElementById('res-gord').innerText   = dados.gord || 0;
-                document.getElementById('res-fibra').innerText  = dados.fibra || 0;
-                document.getElementById('res-acucar').innerText = dados.acucar || 0;
-                document.getElementById('res-sodio').innerText  = dados.sodio || 0;
+                const kcalVal   = dados.kcal || 0;
+                const protVal   = dados.prot || 0;
+                const carboVal  = dados.carbo || 0;
+                const gordVal   = dados.gord || 0;
+                const fibraVal  = dados.fibra || 0;
+                const acucarVal = dados.acucar || 0;
+                const sodioVal  = dados.sodio || 0;
+
+                document.getElementById('res-kcal').innerText   = kcalVal;
+                document.getElementById('res-prot').innerText   = protVal;
+                document.getElementById('res-carbo').innerText  = carboVal;
+                document.getElementById('res-gord').innerText   = gordVal;
+                document.getElementById('res-fibra').innerText  = fibraVal;
+                document.getElementById('res-acucar').innerText = acucarVal;
+                document.getElementById('res-sodio').innerText  = sodioVal;
                 
+                // Dispara a animação fluida das barras
+                atualizarBarraProgresso('bar-kcal', kcalVal, metasDiarias.kcal);
+                atualizarBarraProgresso('bar-prot', protVal, metasDiarias.prot);
+                atualizarBarraProgresso('bar-carbo', carboVal, metasDiarias.carbo);
+                atualizarBarraProgresso('bar-gord', gordVal, metasDiarias.gord);
+                atualizarBarraProgresso('bar-fibra', fibraVal, metasDiarias.fibra);
+                atualizarBarraProgresso('bar-acucar', acucarVal, metasDiarias.acucar);
+                atualizarBarraProgresso('bar-sodio', sodioVal, metasDiarias.sodio);
+
                 atualizarGrafico(
-                    parseFloat(dados.prot || 0), 
-                    parseFloat(dados.carbo || 0), 
-                    parseFloat(dados.gord || 0),
-                    parseFloat(dados.fibra || 0),
-                    parseFloat(dados.acucar || 0),
-                    parseFloat(dados.sodio || 0)
+                    parseFloat(protVal), 
+                    parseFloat(carboVal), 
+                    parseFloat(gordVal),
+                    parseFloat(fibraVal),
+                    parseFloat(acucarVal),
+                    parseFloat(sodioVal)
                 );
             });
     }
@@ -341,7 +472,6 @@ try {
     });
 
     const urlParams = new URLSearchParams(window.location.search);
-    
     if (urlParams.get('erro') === 'nao_comivel') {
         alert("⚠️ Não foi possível calcular os nutrientes. Por favor, digite um alimento ou refeição válida!");
         window.history.replaceState({}, document.title, window.location.pathname);

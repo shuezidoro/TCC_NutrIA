@@ -66,6 +66,7 @@ $auto_gord  = round(($meta_final_auto * 0.30) / 9);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../../public/css/metas_style.css">
     <title>Minhas Metas - NutrIA</title>
 </head>
 <body>
@@ -90,7 +91,7 @@ $auto_gord  = round(($meta_final_auto * 0.30) / 9);
     </form>
 
     <br>
-    <a href="#" id="btnManual">Já sei meu gasto / Quero definir manualmente</a>
+    <a href="#" id="btnManual">Definir minhas metas</a>
 
     <div id="sectionManual" style="display: none; margin-top: 20px;">
         <form action="../controllers/metas_controller.php" method="POST">
